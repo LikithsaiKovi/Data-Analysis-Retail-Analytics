@@ -173,14 +173,14 @@ Monetary = Total spending
 
 **What it does:**
 - Connects to your PostgreSQL database
-- Creates three tables:
-  - `transactions`: All cleaned transaction records
-  - `customer_segments`: Customer RFM scores and segments
-  - `market_basket_rules`: Product association rules
-- Loads all the data into these tables
+- Creates a star schema and analytical views:
+   - `dim_customer` and `dim_product`
+   - `fact_sales` (transaction-level facts)
+   - Views: `customer_360`, `rfm_base`, `rfm_scores`, `rfm_segments`
+- Loads the data into the dimensions and fact, and builds views
 
 **Input:** All CSV files from previous steps  
-**Output:** Data stored in PostgreSQL database
+**Output:** Data stored in PostgreSQL (`dim_customer`, `dim_product`, `fact_sales`) with RFM views
 
 **Why:** PostgreSQL enables:
 - Efficient querying with SQL
@@ -201,13 +201,13 @@ Once data is loaded into PostgreSQL, create analytical views for advanced analys
 ```sql
 CREATE VIEW customer_360 AS
 SELECT 
-    CustomerID,
-    COUNT(DISTINCT InvoiceNo) AS Frequency,
-    SUM(SalesAmount) AS Monetary,
-    MAX(InvoiceDate) AS LastPurchaseDate,
-    MIN(InvoiceDate) AS FirstPurchaseDate
-FROM transactions
-GROUP BY CustomerID;
+   fs.customer_id AS CustomerID,
+   COUNT(DISTINCT fs.invoice_no) AS Frequency,
+   SUM(fs.sales_amount) AS Monetary,
+   MAX(fs.invoice_date) AS LastPurchaseDate,
+   MIN(fs.invoice_date) AS FirstPurchaseDate
+FROM fact_sales fs
+GROUP BY fs.customer_id;
 ```
 
 **What it provides:**
@@ -225,8 +225,8 @@ GROUP BY CustomerID;
 ```sql
 CREATE VIEW rfm_base AS
 SELECT 
-    CustomerID,
-    (SELECT MAX(InvoiceDate) + INTERVAL '1 day' FROM transactions) - LastPurchaseDate AS Recency,
+   CustomerID,
+   (SELECT MAX(invoice_date) + INTERVAL '1 day' FROM fact_sales) - LastPurchaseDate AS Recency,
     Frequency,
     Monetary
 FROM customer_360;
@@ -246,13 +246,13 @@ FROM customer_360;
 ```sql
 CREATE VIEW rfm_scores AS
 SELECT 
-    CustomerID,
-    Recency,
-    Frequency,
-    Monetary,
-    NTILE(5) OVER (ORDER BY Recency DESC) AS R_Score,  -- Lower recency = better
-    NTILE(5) OVER (ORDER BY Frequency ASC) AS F_Score,  -- Higher frequency = better
-    NTILE(5) OVER (ORDER BY Monetary ASC) AS M_Score    -- Higher monetary = better
+   customer_id AS CustomerID,
+   Recency,
+   Frequency,
+   Monetary,
+   NTILE(5) OVER (ORDER BY Recency DESC) AS R_Score,  -- Lower recency = better
+   NTILE(5) OVER (ORDER BY Frequency ASC) AS F_Score,  -- Higher frequency = better
+   NTILE(5) OVER (ORDER BY Monetary ASC) AS M_Score    -- Higher monetary = better
 FROM rfm_base;
 ```
 
@@ -310,9 +310,10 @@ FROM rfm_scores;
 4. Choose **Import** mode (recommended for better performance)
 5. Authenticate with PostgreSQL credentials
 6. Select tables/views to load:
-   - `transactions`
-   - `customer_segments` (or `rfm_segments` view)
-   - `market_basket_rules`
+   - `dim_customer`
+   - `dim_product`
+   - `fact_sales`
+   - `rfm_segments`
 7. Click **Load**
 
 **Why Power BI?**
@@ -430,16 +431,16 @@ After loading data, create analytical views in pgAdmin:
 -- View 1: Customer 360
 CREATE VIEW customer_360 AS
 SELECT 
-    "CustomerID",
-    COUNT(DISTINCT "InvoiceNo") AS frequency,
-    SUM("SalesAmount") AS monetary,
-    MAX("InvoiceDate") AS last_purchase_date
-FROM transactions
-GROUP BY "CustomerID";
+   fs.customer_id AS "CustomerID",
+   COUNT(DISTINCT fs."InvoiceNo") AS frequency,
+   SUM(fs."SalesAmount") AS monetary,
+   MAX(fs."InvoiceDate") AS last_purchase_date
+FROM fact_sales fs
+GROUP BY fs.customer_id;
 
--- View 2: RFM Segments (query from customer_segments table)
+-- View 2: RFM Segments (from rfm_segments view)
 SELECT segment, COUNT(*) AS customer_count
-FROM customer_segments
+FROM rfm_segments
 GROUP BY segment
 ORDER BY customer_count DESC;
 ```
@@ -451,7 +452,7 @@ ORDER BY customer_count DESC;
 3. Enter connection:
    - Server: `localhost`
    - Database: `retail_analytics`
-4. Load tables: `transactions`, `customer_segments`, `market_basket_rules`
+4. Load tables/views: `dim_customer`, `dim_product`, `fact_sales`, `rfm_segments`
 5. Create visualizations
 
 ---
@@ -524,79 +525,78 @@ ORDER BY customer_count DESC;
 
 ---
 
-## 📝 Database Schema
+## 📝 Database Schema (matches pgAdmin)
 
-### **Table 1: transactions**
+### **Table: dim_customer**
 
-Stores all cleaned retail transactions.
+Holds one row per customer.
 
 | Column | Data Type | Description |
 |--------|-----------|-------------|
-| CustomerID | VARCHAR | Unique customer identifier |
-| InvoiceNo | VARCHAR | Unique invoice identifier |
-| InvoiceDate | TIMESTAMP | Purchase date and time |
-| StockCode | VARCHAR | Product stock code |
-| Description | TEXT | Product description |
-| Quantity | INTEGER | Number of units purchased |
-| UnitPrice | DECIMAL | Price per unit |
-| SalesAmount | DECIMAL | Total sales (Quantity × UnitPrice) |
-| Country | VARCHAR | Customer's country |
-
-**Purpose:** Foundation table for all analysis. Contains transaction-level detail.
+| customer_id | VARCHAR | Unique customer identifier (PK) |
+| country | VARCHAR | Customer's country |
 
 ---
 
-### **Table 2: customer_segments**
+### **Table: dim_customer_backup**
 
-Stores customer RFM scores and segment classifications.
+Empty structure clone of `dim_customer` for backups.
 
-| Column | Data Type | Description |
-|--------|-----------|-------------|
-| CustomerID | VARCHAR | Unique customer identifier |
-| Recency | INTEGER | Days since last purchase |
-| Frequency | INTEGER | Number of unique purchases |
-| Monetary | DECIMAL | Total amount spent |
-| R_Score | INTEGER | Recency score (1-5) |
-| F_Score | INTEGER | Frequency score (1-5) |
-| M_Score | INTEGER | Monetary score (1-5) |
-| RFM_Score | VARCHAR | Combined RFM score (e.g., "555") |
-| Segment | VARCHAR | Customer segment classification |
-
-**Purpose:** One row per customer with their behavioral metrics and segment.
-
-**Sample Query:**
-```sql
--- Count customers by segment
-SELECT segment, COUNT(*) AS customer_count
-FROM customer_segments
-GROUP BY segment
-ORDER BY customer_count DESC;
-```
+| Column | Data Type |
+|--------|-----------|
+| customer_id | VARCHAR |
+| country | VARCHAR |
 
 ---
 
-### **Table 3: market_basket_rules**
+### **Table: dim_product**
 
-Stores product association rules from market basket analysis.
+Holds one row per product.
 
 | Column | Data Type | Description |
 |--------|-----------|-------------|
-| antecedents | TEXT | Product(s) that trigger the rule |
-| consequents | TEXT | Product(s) bought together |
-| support | DECIMAL | How often the itemset appears |
-| confidence | DECIMAL | Probability of consequent given antecedent |
-| lift | DECIMAL | Strength of association |
+| product_id | VARCHAR | Product identifier (PK) |
+| product_name | TEXT | Product name/description |
 
-**Purpose:** Identifies products frequently purchased together.
+---
 
-**Sample Query:**
-```sql
--- Top 10 product associations
-SELECT antecedents, consequents, lift, confidence
-FROM market_basket_rules
-ORDER BY lift DESC
-LIMIT 10;
-```
+### **Table: dim_product_backup**
+
+Empty structure clone of `dim_product` for backups.
+
+| Column | Data Type |
+|--------|-----------|
+| product_id | VARCHAR |
+| product_name | TEXT |
+
+---
+
+### **Table: fact_sales**
+
+Transaction-level facts used for analysis.
+
+| Column | Data Type | Description |
+|--------|-----------|-------------|
+| sale_id | BIGSERIAL | Surrogate key (PK) |
+| invoice_no | VARCHAR | Invoice identifier |
+| customer_id | VARCHAR | FK to `dim_customer.customer_id` |
+| product_id | VARCHAR | FK to `dim_product.product_id` |
+| quantity | INTEGER | Units purchased |
+| sales_amount | NUMERIC(12,2) | Quantity × UnitPrice |
+| invoice_date | TIMESTAMP | Purchase date and time |
+
+---
+
+### **Views: customer_360, rfm_base, rfm_scores, rfm_segments**
+
+RFM analytical layer over `fact_sales`.
+
+| View | Purpose |
+|------|---------|
+| customer_360 | Customer-level aggregates: frequency, monetary, last purchase date |
+| rfm_base | Adds `recency` using snapshot logic |
+| rfm_scores | NTILE(5) scoring for R, F, M |
+| rfm_segments | Final segments and `rfm_score` |
 
 ---
 
