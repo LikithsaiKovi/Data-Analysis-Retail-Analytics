@@ -318,12 +318,7 @@ FROM rfm_scores;
 
 **Why Power BI?**
 - Interactive dashboards with drill-down capabilities
-- Real-time refresh from PostgreSQL
-- Business-friendly visualizations
-- Easy sharing with stakeholders
-
 ---
-
 #### **Power BI Dashboard Components**
 
 **Key Metrics (Cards):**
@@ -339,7 +334,6 @@ FROM rfm_scores;
 **Revenue by Segment (Bar Chart):**
 - Identifies which segments generate most revenue
 - Champions should be largest contributor
-
 **Country-wise Analysis (Map/Table):**
 - Geographic distribution of customers
 - Segment breakdown by country
@@ -358,7 +352,6 @@ FROM rfm_scores;
 
 ## 💻 How to Run the Project
 
-### **Prerequisites**
 
 1. **Python 3.8 or higher**
 2. **PostgreSQL** installed and running
