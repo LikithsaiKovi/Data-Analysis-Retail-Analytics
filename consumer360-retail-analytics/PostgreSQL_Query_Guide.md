@@ -44,27 +44,61 @@ SELECT current_database();
 
 ## 📊 STEP 2: Load Data (Using Python Script)
 
-**At this point, run the Python script:**
+**🔴 CRITICAL: You MUST complete this step before proceeding to STEP 3 and beyond!**
+
+### 2.1 Update Database Connection
+
+First, open `scripts/04_load_to_postgres.py` and update the connection string:
+
+```python
+# Update these values with your PostgreSQL credentials
+engine = create_engine('postgresql://username:password@localhost:5432/retail_analytics')
+
+# Example:
+# engine = create_engine('postgresql://postgres:mypassword@localhost:5432/retail_analytics')
+```
+
+### 2.2 Run the Python Script
+
+**Make sure you're in the correct directory:**
 
 ```bash
+# Navigate to project root
+cd consumer360-retail-analytics
+
+# Run the script
 python scripts/04_load_to_postgres.py
 ```
 
-**⚠️ Important:** Before running, update the connection string in `04_load_to_postgres.py`:
-
-```python
-# Example connection string
-engine = create_engine('postgresql://username:password@localhost:5432/retail_analytics')
+**Expected Console Output:**
 ```
+Loading transactions...
+✅ Transactions loaded successfully: XXXXX rows
+Loading customer segments...
+✅ Customer segments loaded successfully: XXXX rows
+Loading market basket rules...
+✅ Market basket rules loaded successfully: XXX rows
+```
+
+**⚠️ If you see errors, check:**
+- PostgreSQL is running
+- Database connection credentials are correct
+- You ran scripts 01, 02, and 03 first (to generate the CSV files)
 
 This script will create and populate three tables:
 - `transactions`
 - `customer_segments`
 - `market_basket_rules`
 
+**❗ DO NOT proceed to STEP 3 until this completes successfully!**
+
 ---
 
 ## ✅ STEP 3: Verify Data Loading
+
+**⚠️ STOP! Before running these queries:**
+
+Make sure the Python script in STEP 2 completed successfully. If you get "relation does not exist" errors, go back to STEP 2.
 
 ### 3.1 Check All Tables
 
@@ -83,6 +117,11 @@ transactions
 customer_segments
 market_basket_rules
 ```
+
+**⚠️ If you DON'T see these 3 tables:**
+- ❌ The Python script didn't run successfully
+- ❌ Go back to STEP 2 and fix any errors
+- ❌ Do NOT proceed to create views
 
 ---
 
@@ -124,6 +163,23 @@ SELECT * FROM market_basket_rules LIMIT 5;
 ---
 
 ## 📈 STEP 4: Create Analytical Views
+
+**⚠️ PREREQUISITE CHECK:**
+
+Before creating views, verify tables exist by running:
+
+```sql
+SELECT COUNT(*) FROM transactions;
+SELECT COUNT(*) FROM customer_segments;
+SELECT COUNT(*) FROM market_basket_rules;
+```
+
+**If you get "relation does not exist" error:**
+- ❌ Tables are not loaded
+- ❌ Go back to STEP 2 and run the Python script
+- ❌ Verify script completes without errors
+
+---
 
 ### 4.1 Create Customer 360 View
 
@@ -496,7 +552,45 @@ ORDER BY num_customers DESC;
 
 ## 🚨 Common Errors & Solutions
 
-### Error 1: Column Does Not Exist
+### Error 1: Relation "transactions" Does Not Exist
+
+**Error Message:**
+```
+ERROR:  relation "transactions" does not exist
+LINE 9: FROM transactions
+```
+
+**Cause:** You're trying to create views or run queries BEFORE loading data into PostgreSQL.
+
+**Solution:**
+1. ✅ **First**, run the Python script to load data:
+   ```bash
+   python scripts/04_load_to_postgres.py
+   ```
+
+2. ✅ **Then**, verify tables exist:
+   ```sql
+   SELECT table_name FROM information_schema.tables 
+   WHERE table_schema = 'public';
+   ```
+
+3. ✅ **Only then** create views and run analytical queries
+
+**Root Cause:** 
+- You skipped STEP 2 (Python data loading)
+- The Python script failed but you didn't notice
+- You're connected to the wrong database
+
+**Quick Check:**
+```sql
+-- Should return 3 tables
+SELECT COUNT(*) FROM information_schema.tables 
+WHERE table_schema = 'public';
+```
+
+---
+
+### Error 2: Column Does Not Exist
 
 **Error Message:**
 ```
@@ -521,7 +615,7 @@ WHERE "Segment" = 'At Risk'
 
 ---
 
-### Error 2: Column Name Case Sensitivity
+### Error 3: Column Name Case Sensitivity
 
 **Error Message:**
 ```
@@ -540,7 +634,7 @@ SELECT "CustomerID" FROM transactions;
 
 ---
 
-### Error 3: Ambiguous Column Name
+### Error 4: Ambiguous Column Name
 
 **Error Message:**
 ```
@@ -564,7 +658,7 @@ JOIN transactions t ON cs."CustomerID" = t."CustomerID";
 
 ---
 
-### Error 4: View Already Exists
+### Error 5: View Already Exists
 
 **Error Message:**
 ```
