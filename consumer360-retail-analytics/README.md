@@ -1,10 +1,10 @@
-# 🛍️ Retail Analytics - Customer Segmentation & RFM Analysis
+# Retail Analytics — Customer Segmentation & RFM Analysis
 
 An **end-to-end customer analytics pipeline** using **PostgreSQL** for data processing and **Power BI** for visualization. This project analyzes online retail transactions to understand customer purchasing behavior and segment customers using **RFM Analysis (Recency, Frequency, Monetary)**.
 
 ---
 
-## 📊 Project Objective
+## Project Objective
 
 This project demonstrates:
 - **SQL-based data transformation** - Using PostgreSQL as the primary data processing engine
@@ -15,7 +15,7 @@ This project demonstrates:
 
 ---
 
-## 🎯 What This Project Does
+## What This Project Does
 
 This project takes raw retail transaction data and:
 1. **Cleans the data** - Removes errors, missing values, and invalid records
@@ -27,7 +27,7 @@ This project takes raw retail transaction data and:
 ---
 
 
-## 📦 Dataset Understanding
+## Dataset Understanding
 
 The dataset is an **Online Retail transactional dataset** containing individual purchase records. Each row represents a single product purchased as part of an invoice.
 
@@ -319,32 +319,29 @@ FROM rfm_scores;
 **Why Power BI?**
 - Interactive dashboards with drill-down capabilities
 ---
-#### **Power BI Dashboard Components**
+#### Power BI Dashboard Components
 
 **Key Metrics (Cards):**
-- 📊 Total Customers
-- 💰 Total Revenue
-- 🛒 Total Orders
-- 📦 Total Products Sold
+- Total Customers
+- Total Revenue
+- Total Orders
+- Total Products Sold
 
 **Customer Segmentation Visual (Pie/Donut Chart):**
 - Customer distribution by segment
-- Shows which segments dominate
+- Segment distribution overview
 
 **Revenue by Segment (Bar Chart):**
-- Identifies which segments generate most revenue
-- Champions should be largest contributor
+- Revenue by segment
 **Country-wise Analysis (Map/Table):**
 - Geographic distribution of customers
 - Segment breakdown by country
 
 **RFM Score Distribution (Scatter Plot):**
 - X-axis: Recency, Y-axis: Monetary, Size: Frequency
-- Identify customer clusters visually
 
 **Market Basket Rules (Table):**
-- Top product associations
-- Lift values for cross-selling opportunities
+- Top product associations by lift
 
 ---
 
@@ -425,9 +422,9 @@ After loading data, create analytical views in pgAdmin:
 CREATE VIEW customer_360 AS
 SELECT 
    fs.customer_id AS "CustomerID",
-   COUNT(DISTINCT fs."InvoiceNo") AS frequency,
-   SUM(fs."SalesAmount") AS monetary,
-   MAX(fs."InvoiceDate") AS last_purchase_date
+   COUNT(DISTINCT fs.invoice_no) AS frequency,
+   SUM(fs.sales_amount) AS monetary,
+   MAX(fs.invoice_date) AS last_purchase_date
 FROM fact_sales fs
 GROUP BY fs.customer_id;
 
@@ -450,29 +447,24 @@ ORDER BY customer_count DESC;
 
 ---
 
-## 📊 Key Insights & Business Value
+## Key Insights & Business Value
 
-### **Customer Insights**
-- 🏆 Identify Champions who drive most revenue
-- 🔄 Detect at-risk customers before they churn
-- 📈 Track customer lifetime value trends
-- 🎯 Create targeted marketing campaigns per segment
+### Customer Insights
+- Identify champion customers and at-risk segments
+- Track customer lifetime value trends
+- Target marketing campaigns by segment
 
-### **Product Insights**
-- 🛒 Discover frequently bought together items
-- 📦 Optimize product bundling strategies
-- 💡 Identify cross-selling opportunities
-- 🏪 Improve store layout and product placement
+### Product Insights
+- Discover frequently bought together items
+- Optimize product bundling strategies
+- Identify cross-selling opportunities
 
-### **Revenue Optimization**
-- 💰 Focus retention efforts on high-value customers
-- 📉 Reduce churn with proactive campaigns
-- 📊 Allocate marketing budget by segment ROI
-- ⚡ Increase average order value through recommendations
+### Revenue Optimization
+- Focus retention efforts on high-value customers
+- Reduce churn with proactive campaigns
+- Allocate marketing budget by segment ROI
 
----
-
-## 🎓 Key Learnings & Technical Concepts
+## Key Learnings & Technical Concepts
 
 ### **SQL & Database Skills**
 - ✅ Data aggregation using `GROUP BY`
@@ -503,7 +495,7 @@ ORDER BY customer_count DESC;
 
 ---
 
-## 🛠️ Technologies Used
+## Technologies Used
 
 | Technology | Purpose |
 |-----------|---------|
@@ -775,7 +767,7 @@ These definitions and checks reproduce the exact tables and columns displayed in
 
 ---
 
-## 📚 Project Summary
+## Project Summary
 
 This project demonstrates a complete **customer analytics workflow** using industry-standard tools and methodologies:
 
@@ -816,7 +808,7 @@ This project demonstrates a complete **customer analytics workflow** using indus
 
 ---
 
-## 🔄 Future Enhancements
+## Future Enhancements
 
 Potential improvements to extend this project:
 
