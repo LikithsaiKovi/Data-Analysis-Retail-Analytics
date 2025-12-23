@@ -600,6 +600,160 @@ LIMIT 10;
 
 ---
 
+## 🧭 PostgreSQL DDL & Views (matches pgAdmin screenshot)
+
+The queries below recreate exactly the tables and views shown in pgAdmin (dim tables, fact table, and the four RFM views). Run them **after** the Python load scripts have generated the CSVs you need.
+
+### 1) Core Tables (star schema)
+
+```sql
+-- Dimension: Customers
+CREATE TABLE IF NOT EXISTS dim_customer (
+   customer_id VARCHAR PRIMARY KEY,
+   country     VARCHAR
+);
+
+-- Backup copy (optional)
+CREATE TABLE IF NOT EXISTS dim_customer_backup AS
+SELECT * FROM dim_customer
+WHERE FALSE; -- creates empty structure
+
+-- Dimension: Products
+CREATE TABLE IF NOT EXISTS dim_product (
+   product_id   VARCHAR PRIMARY KEY,
+   product_name TEXT
+);
+
+-- Backup copy (optional)
+CREATE TABLE IF NOT EXISTS dim_product_backup AS
+SELECT * FROM dim_product
+WHERE FALSE;
+
+-- Fact: Sales
+CREATE TABLE IF NOT EXISTS fact_sales (
+   sale_id      BIGSERIAL PRIMARY KEY,
+   invoice_no   VARCHAR,
+   customer_id  VARCHAR REFERENCES dim_customer(customer_id),
+   product_id   VARCHAR REFERENCES dim_product(product_id),
+   quantity     INTEGER,
+   sales_amount NUMERIC(12,2),
+   invoice_date TIMESTAMP
+);
+
+-- Helpful indexes for performance
+CREATE INDEX IF NOT EXISTS idx_fact_sales_customer ON fact_sales(customer_id);
+CREATE INDEX IF NOT EXISTS idx_fact_sales_invoice_date ON fact_sales(invoice_date);
+```
+
+### 2) Populate Dimensions and Fact (example flow)
+
+```sql
+-- Load distinct customers and countries
+INSERT INTO dim_customer (customer_id, country)
+SELECT DISTINCT customer_id, country
+FROM staging_transactions;  -- replace with your staging/source table
+
+-- Load distinct products
+INSERT INTO dim_product (product_id, product_name)
+SELECT DISTINCT stockcode AS product_id, description AS product_name
+FROM staging_transactions;  -- replace with your staging/source table
+
+-- Load fact table
+INSERT INTO fact_sales (invoice_no, customer_id, product_id, quantity, sales_amount, invoice_date)
+SELECT 
+   invoice_no,
+   customer_id,
+   stockcode AS product_id,
+   quantity,
+   salesamount AS sales_amount,
+   invoicedate AS invoice_date
+FROM staging_transactions;  -- replace with your staging/source table
+```
+
+> If you are already loading directly from the Python script, keep using that; the DDL above ensures the schema matches the screenshot.
+
+### 3) RFM Views (customer_360 → rfm_base → rfm_scores → rfm_segments)
+
+```sql
+-- View: customer_360
+CREATE OR REPLACE VIEW customer_360 AS
+SELECT 
+   fs.customer_id,
+   dc.country,
+   COUNT(DISTINCT fs.invoice_no) AS frequency,
+   SUM(fs.sales_amount)          AS monetary,
+   MAX(fs.invoice_date)          AS last_purchase_date
+FROM fact_sales fs
+LEFT JOIN dim_customer dc ON dc.customer_id = fs.customer_id
+GROUP BY fs.customer_id, dc.country;
+
+-- View: rfm_base (snapshot = day after latest invoice)
+CREATE OR REPLACE VIEW rfm_base AS
+SELECT 
+   c.customer_id,
+   c.country,
+   EXTRACT(DAY FROM ((SELECT MAX(invoice_date) FROM fact_sales) + INTERVAL '1 day' - c.last_purchase_date)) AS recency,
+   c.frequency,
+   c.monetary
+FROM customer_360 c;
+
+-- View: rfm_scores
+CREATE OR REPLACE VIEW rfm_scores AS
+SELECT 
+   customer_id,
+   country,
+   recency,
+   frequency,
+   monetary,
+   NTILE(5) OVER (ORDER BY recency DESC)   AS r_score, -- lower recency is better
+   NTILE(5) OVER (ORDER BY frequency ASC)   AS f_score, -- higher frequency is better
+   NTILE(5) OVER (ORDER BY monetary ASC)    AS m_score  -- higher monetary is better
+FROM rfm_base;
+
+-- View: rfm_segments
+CREATE OR REPLACE VIEW rfm_segments AS
+SELECT 
+   customer_id,
+   country,
+   recency,
+   frequency,
+   monetary,
+   r_score,
+   f_score,
+   m_score,
+   (r_score::TEXT || f_score::TEXT || m_score::TEXT) AS rfm_score,
+   CASE 
+      WHEN r_score >= 4 AND f_score >= 4 AND m_score >= 4 THEN 'Champions'
+      WHEN r_score >= 3 AND f_score >= 3 AND m_score >= 3 THEN 'Loyal Customers'
+      WHEN r_score >= 4 AND f_score < 3 THEN 'Potential Loyalists'
+      WHEN r_score <= 2 AND f_score >= 3 THEN 'At Risk'
+      ELSE 'Churn Risk'
+   END AS segment
+FROM rfm_scores;
+```
+
+### 4) Quick Validation Queries (should match the screenshot)
+
+```sql
+-- Table existence
+SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';
+
+-- Sample rows
+SELECT * FROM dim_customer    LIMIT 5;
+SELECT * FROM dim_product     LIMIT 5;
+SELECT * FROM fact_sales      LIMIT 5;
+
+-- Views
+SELECT * FROM customer_360    LIMIT 5;
+SELECT * FROM rfm_base        LIMIT 5;
+SELECT * FROM rfm_scores      LIMIT 5;
+SELECT * FROM rfm_segments    LIMIT 5;
+```
+
+These definitions and checks reproduce the exact tables and columns displayed in pgAdmin: `dim_customer`, `dim_customer_backup`, `dim_product`, `dim_product_backup`, `fact_sales`, and the four views `customer_360`, `rfm_base`, `rfm_scores`, `rfm_segments`.
+
+---
+
 ## 🎯 Use Cases & Applications
 
 ### **For E-commerce Businesses**
